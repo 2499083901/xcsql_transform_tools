@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星辰 SQL 改造工具</title>
+  <style>
+    :root {
+      --primary-color: #2c3e50;
+      --accent-color: #3498db;
+      --background-color: #f8f9fa;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      line-height: 1.6;
+      padding: 2rem;
+      max-width: 1000px;
+      margin: 0 auto;
+      background-color: var(--background-color);
+      color: var(--primary-color);
+    }
+
+    h2 {
+      color: var(--accent-color);
+      border-bottom: 2px solid;
+      padding-bottom: 0.5em;
+    }
+
+    textarea {
+      width: 100%;
+      height: 200px;
+      margin: 1rem 0;
+      padding: 0.8rem;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-family: 'Consolas', monospace;
+      transition: border-color 0.3s ease;
+      resize: vertical;
+    }
+
+    textarea:focus {
+      border-color: var(--accent-color);
+      outline: none;
+    }
+
+    .button-group {
+      margin: 1rem 0;
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 0.8rem 1.5rem;
+      background-color: var(--accent-color);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: opacity 0.3s ease;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    nav {
+      margin-bottom: 1.5rem;
+    }
+
+    nav button {
+      background-color: #ddd;
+      color: #333;
+      margin-right: 0.3rem;
+    }
+
+    nav button.active {
+      background-color: var(--accent-color);
+      color: white;
+    }
+
+    section {
+      display: none;
+    }
+
+    section.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<h2>🌟 星辰 SQL 改造工具</h2>
+
+<nav>
+  <button id="mode1" class="active">功能 1：建表/索引 改造</button>
+  <button id="mode2">功能 2：新增字段 ALTER SQL</button>
+</nav>
+
+<!-- 功能 1 -->
+<section id="section1" class="active">
+  <textarea id="input1" placeholder="粘贴原始 SQL..."></textarea>
+  <div class="button-group">
+    <button onclick="transformSQL()">🚀 改造 SQL</button>
+    <button onclick="copyOutput('output1')">📄 复制结果</button>
+  </div>
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+<!--    <h3 style="margin: 0;">📋 改造结果</h3>-->
+<!--    <button id="copyBtn" onclick="copyOutput('output1')">📄 复制到剪贴板</button>-->
+  </div>
+  <textarea id="output1" placeholder="改造后的 SQL..." readonly></textarea>
+</section>
+
+<!-- 功能 2 -->
+<section id="section2">
+  <input type="text" id="tableName" placeholder=" 请输入表名..." style="width: 100%; padding: 10px; font-size: 15px; border: 2px solid #ddd; border-radius: 5px;">
+  <textarea id="fieldInput" placeholder="多个字段用英文逗号 , 分隔（例：fk_id int8 NULL, fk_name citext NOT NULL DEFAULT 'xx'）"></textarea>
+
+  <div class="button-group">
+    <button onclick="generateAlterSQL()">✨ 生成 ALTER SQL</button>
+    <button onclick="copyOutput('alterOutput')">📄 复制结果</button>
+  </div>
+  <h3 style="margin: 0;">📋 改造结果</h3>
+  <textarea id="alterOutput" placeholder="生成的 ALTER SQL..." readonly></textarea>
+</section>
+
+<script>
+  // 切换功能模块
+  document.getElementById('mode1').addEventListener('click', () => {
+    setMode(1);
+  });
+  document.getElementById('mode2').addEventListener('click', () => {
+    setMode(2);
+  });
+
+  function setMode(mode) {
+    document.getElementById('mode1').classList.remove('active');
+    document.getElementById('mode2').classList.remove('active');
+    document.getElementById('section1').classList.remove('active');
+    document.getElementById('section2').classList.remove('active');
+
+    document.getElementById(`mode${mode}`).classList.add('active');
+    document.getElementById(`section${mode}`).classList.add('active');
+  }
+
+  function transformSQL() {
+    const input = document.getElementById('input1').value.trim();
+    if (!input) {
+      alert('⚠️ 请粘贴原始 SQL');
+      return;
+    }
+    const statements = input.split(/;\s*\n?/).filter(s => s.trim());
+    const dialectTag = '/#dialect-simple#/';
+    const output = [];
+
+    statements.forEach(stmt => {
+      const s = stmt.trim();
+      const lower = s.toLowerCase();
+      let res = '';
+
+      if (lower.startsWith('create table')) {
+        res = s.replace(/create table\s+(\w+)/i, 'CREATE TABLE IF NOT EXISTS #SCHEMANAME#.$1');
+      } else if (lower.startsWith('alter table')) {
+        res = s.replace(/alter table\s+(\w+)/i, 'ALTER TABLE IF EXISTS ONLY #SCHEMANAME#.$1')
+                .replace(/add constraint/i, 'ADD CONSTRAINT');
+      } else if (lower.startsWith('insert into')) {
+        const match = s.match(/into\s+(\w+)\s*\(([^)]+)\)\s*values\s*\(([^)]+)\)/i);
+        if (match) {
+          const table = match[1];
+          const cols = match[2].split(',').map(c => c.trim().toLowerCase());
+          const vals = match[3].split(',');
+          const fidIdx = cols.indexOf('fid');
+          if (fidIdx !== -1 && vals[fidIdx]) {
+            output.push(`${dialectTag}\nDELETE FROM #SCHEMANAME#.${table} WHERE fid = ${vals[fidIdx].trim()};`);
+          }
+        }
+        res = s.replace(/insert into\s+(\w+)/i, 'INSERT INTO #SCHEMANAME#.$1');
+      } else if (lower.startsWith('create index')) {
+        res = s.replace(/create index\s+/i, 'CREATE INDEX IF NOT EXISTS ')
+                .replace(/on\s+(\w+)/i, 'ON #SCHEMANAME#.$1');
+      }
+
+      if (res) output.push(`${dialectTag}\n${res};`);
+    });
+
+    document.getElementById('output1').value = output.join('\n\n');
+  }
+
+  function generateAlterSQL() {
+    const tableName = document.getElementById('tableName').value.trim();
+    const rawFields = document.getElementById('fieldInput').value.trim();
+    if (!tableName || !rawFields) {
+      alert('⚠️ 请填写表名和字段定义');
+      return;
+    }
+
+    const dialectTag = '/#dialect-simple#/';
+    const fields = rawFields.split(',').map(f => f.trim()).filter(f => f);
+    const sqls = fields.map(f =>
+            `${dialectTag}\nALTER TABLE IF EXISTS ONLY #SCHEMANAME#.${tableName} \nADD COLUMN IF NOT EXISTS ${f};`
+    );
+
+    document.getElementById('alterOutput').value = sqls.join('\n\n');
+  }
+
+  function copyOutput(id) {
+    const target = document.getElementById(id);
+    if (!target.value.trim()) {
+      alert('没有内容可复制');
+      return;
+    }
+
+    navigator.clipboard.writeText(target.value).then(() => {
+      alert('✅ 已复制到剪贴板');
+    }).catch(() => {
+      target.select();
+      document.execCommand('copy');
+      alert('✅ 已复制（兼容模式）');
+    });
+  }
+</script>
+</body>
+</html>
