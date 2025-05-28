@@ -1,0 +1,2 @@
+# xcsql_transform_tools
+一个用于星辰 SQL 改造的便捷工具，支持建表、索引和字段新增。
