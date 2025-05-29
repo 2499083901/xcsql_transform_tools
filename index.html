@@ -152,7 +152,7 @@
   function transformSQL() {
     const input = document.getElementById('input1').value.trim();
     if (!input) {
-      alert('⚠️ 请粘贴原始 SQL');
+      alert('⚠️ 请粘贴原始 SQL !');
       return;
     }
     const statements = input.split(/;\s*\n?/).filter(s => s.trim());
