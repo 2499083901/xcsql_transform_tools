@@ -201,7 +201,7 @@
     }
 
     const dialectTag = '/#dialect-simple#/';
-    const fields = rawFields.split(',').map(f => f.trim()).filter(f => f);
+    const fields = rawFields.split(/,(?![^(]*\))/).map(f => f.trim()).filter(f => f);
     const sqls = fields.map(f =>
             `${dialectTag}\nALTER TABLE IF EXISTS ONLY #SCHEMANAME#.${tableName} \nADD COLUMN IF NOT EXISTS ${f};`
     );
